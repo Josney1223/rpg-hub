@@ -1,0 +1,61 @@
+name: build
+
+# Builds standalone binaries for Linux and Windows on every push and when you
+# publish a release. Download them from the run's "Artifacts" section, or they
+# attach automatically to a GitHub Release.
+
+on:
+  push:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: mothership-lights-linux
+            binary: dist/mothership-lights
+          - os: windows-latest
+            artifact: mothership-lights-windows
+            binary: dist/mothership-lights.exe
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Tk (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pyinstaller tinytuya pygame-ce
+
+      - name: Build
+        run: python -m PyInstaller mothership_lights.spec --noconfirm --clean
+
+      - name: Smoke test (headless)
+        run: python mothership_lights.py --selftest
+        env:
+          SDL_AUDIODRIVER: dummy
+          SDL_VIDEODRIVER: dummy
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.binary }}
