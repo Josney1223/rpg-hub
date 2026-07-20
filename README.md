@@ -35,6 +35,22 @@ Run it:
 python3 mothership_lights.py
 ```
 
+### Project layout
+```
+mothership_lights.py     entry point (also: --selftest)
+mslights/                package
+  app.py                 main window + shared state
+  config.py              paths + JSON persistence
+  colors.py              colour math + Mothership palette
+  lights.py              bulb control + effects (Controller)
+  audio.py               OST/SFX playlist engine (AudioEngine)
+  packs.py               music-pack import/export
+  devices_panel.py       Bulbs panel
+  lights_panel.py        Lights tab
+  audio_panel.py         Audio tab
+  selftest.py            headless checks
+```
+
 ---
 
 ## 2. Get each bulb's LOCAL KEY (one-time, the fiddly part)
@@ -109,25 +125,28 @@ frame; any Instant button also stops a running effect first.
 
 ## 5. Audio (the "Audio" tab)
 
-- **Add bed (loop)** — pick a track that loops forever as the ambient bed (ship
-  hum, engine drone, station rumble). Only one bed plays at a time; choosing a new
-  one fades in over the old.
-- **Add stinger** — pick a one-shot sound (klaxon, clank, alarm) that layers over
-  the bed each time you fire it.
-- **▶** plays a track; **Stop bed** fades the bed out; **Stop all audio** cuts
-  everything; **Volume** is the master level.
+Audio is organised into **playlists**. Each playlist has a name and a category:
 
-### Linking audio to a light cue
-Each track has a **"fires with"** dropdown. Set it to a light cue (e.g. the klaxon
-→ *ALERT RED*, the drone → *Hum blue*) and that sound triggers automatically
-whenever you press that light button — so one tap snaps the lights and plays the
-sound together. Leave it on **—** for manual-only.
+- **OST** = the music/ambient layer (plays through pygame's music stream).
+- **SFX** = the effects layer (plays on a reserved channel).
 
-Suggested rig for Mothership: a low engine-drone **bed** linked to *Hum blue*, a
-**klaxon** stinger linked to *ALERT RED*, and a metallic **clank** stinger left on
-manual for when something moves in the vents.
+Because the two use different outputs, **one OST playlist and one SFX playlist
+play at the same time** — e.g. an engine-drone OST looping under a klaxon SFX.
+Each slot auto-advances through its tracks and loops when *Loop* is set;
+*Shuffle* randomises order.
 
----
+- **New playlist** — name it, pick OST or SFX, toggle Loop/Shuffle, and add
+  tracks (`.ogg`, `.mp3`, `.wav`, `.flac`; `.ogg` is most reliable for loops).
+- **▶** plays a playlist into its slot; the *Playback* box shows what's on each
+  slot and gives independent **Music** and **SFX** volume sliders plus per-slot
+  **Stop** and a **Stop all audio** button.
+
+### Music packs (share a whole sound set)
+- **Export pack** bundles all your playlists + their audio into one `.zip`
+  containing a `pack.json` manifest and an `audio/` folder.
+- **Import pack** reads such a zip, copies the audio into
+  `<config>/packs/<pack-name>/`, and adds the playlists. Great for dropping in a
+  ready-made Mothership sound set, or moving your setup to another machine.
 
 ## Phone control at the table
 This is a desktop GUI, but because bulb control is just local network calls you can

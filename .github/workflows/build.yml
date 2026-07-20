@@ -4,15 +4,17 @@ name: build
 # publish a release. Download them from the run's "Artifacts" section, or they
 # attach automatically to a GitHub Release.
 
-permissions:
-  contents: write
-
 on:
   push:
     branches: [ main, master ]
   release:
     types: [ published ]
   workflow_dispatch:
+
+# The automatic GITHUB_TOKEN is read-only by default; uploading release
+# assets needs write access to repository contents.
+permissions:
+  contents: write
 
 jobs:
   build:
