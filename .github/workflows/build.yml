@@ -4,6 +4,9 @@ name: build
 # publish a release. Download them from the run's "Artifacts" section, or they
 # attach automatically to a GitHub Release.
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main, master ]
