@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox
 
 from . import config
 from .lights import Controller, tinytuya
+from .ha import HAController, HAClient
 from .audio import AudioEngine, pygame
 from .devices_panel import DevicesPanel
 from .lights_panel import LightsPanel
@@ -24,10 +25,13 @@ class App(tk.Tk):
 
         self.devices = config.load_json(config.DEVICES_FILE, [])
         self.playlists = config.load_json(config.PLAYLISTS_FILE, [])
+        self.settings = config.load_settings()
         self.active = {d["name"]: tk.BooleanVar(value=True) for d in self.devices}
 
         self._q = queue.Queue()
-        self.ctl = Controller(status_cb=lambda m: self.enqueue(("status", m)))
+        self._ha_client = None
+        self.ctl = None
+        self._build_controller()
         self.audio = AudioEngine(status_cb=lambda m: self.enqueue(("status", m)))
 
         self._build()
@@ -35,7 +39,7 @@ class App(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         missing = []
-        if tinytuya is None:
+        if self.backend == "tuya" and tinytuya is None:
             missing.append("tinytuya (lights)")
         if pygame is None:
             missing.append("pygame-ce (audio)")
@@ -67,6 +71,86 @@ class App(tk.Tk):
         ttk.Label(self, textvariable=self.status, relief="sunken",
                   anchor="w", padding=4).pack(fill="x", side="bottom")
 
+    # -- backend / controller --------------------------------------------- #
+    @property
+    def backend(self):
+        return self.settings.get("backend", "tuya")
+
+    def _build_controller(self):
+        if self.ctl is not None:
+            try:
+                self.ctl.close_all()
+            except Exception:
+                pass
+        cb = lambda m: self.enqueue(("status", m))
+        if self.backend == "ha":
+            self._ha_client = HAClient(self.settings.get("ha_url", ""),
+                                       self.settings.get("ha_token", ""))
+            self.ctl = HAController(lambda: self._ha_client, status_cb=cb)
+        else:
+            self._ha_client = None
+            self.ctl = Controller(status_cb=cb)
+
+    def lights_ready(self):
+        if self.backend == "ha":
+            if not (self.settings.get("ha_url") and self.settings.get("ha_token")):
+                return False, "Set Home Assistant URL and token in Settings"
+            return True, ""
+        if tinytuya is None:
+            return False, "tinytuya not installed — lights disabled"
+        return True, ""
+
+    def open_settings(self):
+        win = tk.Toplevel(self)
+        win.title("Settings")
+        win.geometry("460x260")
+        win.columnconfigure(1, weight=1)
+
+        ttk.Label(win, text="Light backend").grid(row=0, column=0, sticky="w", padx=8, pady=8)
+        backend_var = tk.StringVar(value=self.backend)
+        bf = ttk.Frame(win)
+        bf.grid(row=0, column=1, sticky="w", padx=8)
+        ttk.Radiobutton(bf, text="Home Assistant", variable=backend_var, value="ha").pack(side="left")
+        ttk.Radiobutton(bf, text="Tuya (direct)", variable=backend_var, value="tuya").pack(side="left", padx=8)
+
+        ttk.Label(win, text="HA URL").grid(row=1, column=0, sticky="w", padx=8, pady=4)
+        url_e = ttk.Entry(win)
+        url_e.insert(0, self.settings.get("ha_url", ""))
+        url_e.grid(row=1, column=1, sticky="ew", padx=8)
+
+        ttk.Label(win, text="HA token").grid(row=2, column=0, sticky="w", padx=8, pady=4)
+        tok_e = ttk.Entry(win, show="•")
+        tok_e.insert(0, self.settings.get("ha_token", ""))
+        tok_e.grid(row=2, column=1, sticky="ew", padx=8)
+
+        ttk.Label(win, foreground="#888", wraplength=430,
+                  text="Long-Lived Access Token: HA → your profile → Security → "
+                       "Long-lived access tokens → Create.").grid(
+            row=3, column=0, columnspan=2, sticky="w", padx=8, pady=(2, 6))
+
+        def test():
+            try:
+                c = HAClient(url_e.get().strip(), tok_e.get().strip())
+                r = c.ping()
+                self.set_status(f"HA OK: {r.get('message', 'connected')}")
+            except Exception as e:
+                self.set_status(f"HA test failed: {e}")
+
+        def save():
+            self.settings["backend"] = backend_var.get()
+            self.settings["ha_url"] = url_e.get().strip()
+            self.settings["ha_token"] = tok_e.get().strip()
+            config.save_settings(self.settings)
+            self._build_controller()
+            self.devices_panel.rebuild()
+            self.set_status(f"Backend: {self.backend}")
+            win.destroy()
+
+        bar = ttk.Frame(win)
+        bar.grid(row=4, column=0, columnspan=2, sticky="e", padx=8, pady=8)
+        ttk.Button(bar, text="Test HA", command=test).pack(side="left", padx=4)
+        ttk.Button(bar, text="Save", command=save).pack(side="left")
+
     # -- shared helpers used by panels ------------------------------------ #
     def active_devices(self):
         return [d for d in self.devices if self.active.get(d["name"], tk.BooleanVar()).get()]
@@ -96,6 +180,8 @@ class App(tk.Tk):
                     self.set_status(payload)
                 elif kind == "scan_results":
                     self.devices_panel.open_scan_results(payload)
+                elif kind == "ha_lights":
+                    self.devices_panel.open_ha_lights(payload)
         except queue.Empty:
             pass
         self.after(120, self._drain)

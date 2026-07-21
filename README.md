@@ -203,6 +203,30 @@ This project already installs `pygame-ce` in its build scripts and requirements.
 
 ---
 
+## Light backend: Home Assistant (recommended for Tuya/Elgin bulbs)
+
+The app can drive lights two ways, chosen in **⚙ Settings** (button in the Bulbs
+panel):
+
+- **Home Assistant** — the app sends commands to your HA server's REST API and HA
+  controls the bulbs. No local keys, regions, or pairing in the app. Best for
+  Tuya/Elgin bulbs, which are painful to key directly.
+- **Tuya (direct)** — the original tinytuya path (needs each bulb's local key).
+
+### Using the Home Assistant backend
+1. In HA, add your bulb via the `tuya-local` (or LocalTuya) integration so HA
+   controls it locally. Confirm you can toggle it from the HA dashboard.
+2. In HA, create a token: your profile → Security → **Long-lived access tokens**
+   → Create. Copy it.
+3. In the app: **⚙ Settings** → choose **Home Assistant**, paste your HA **URL**
+   (e.g. `http://192.168.0.10:8123`) and the **token**, click **Test HA**, Save.
+4. In the Bulbs panel click **Fetch HA lights**, tick the bulbs to add, Save.
+5. Fire cues as usual — they now go through HA.
+
+Notes: the HA server must be running during sessions. Colours use HA's
+`rgb_color`; the Brightness slider maps to HA `brightness`. Effects send rapid
+service calls, so flicker/pulse look best on a fast local network.
+
 ## Notes & limits
 
 - **2.4 GHz Wi-Fi only** — these bulbs won't join a 5 GHz network.

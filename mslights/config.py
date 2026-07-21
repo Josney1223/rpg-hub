@@ -22,7 +22,14 @@ def default_config_dir():
 CONFIG_DIR = default_config_dir()
 DEVICES_FILE = os.path.join(CONFIG_DIR, "devices.json")
 PLAYLISTS_FILE = os.path.join(CONFIG_DIR, "playlists.json")
+SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 PACKS_DIR = os.path.join(CONFIG_DIR, "packs")
+
+DEFAULT_SETTINGS = {
+    "backend": "tuya",                      # "tuya" (direct) or "ha" (Home Assistant)
+    "ha_url": "http://localhost:8123",
+    "ha_token": "",
+}
 
 
 def load_json(path, default):
@@ -39,3 +46,13 @@ def save_json(path, data):
     with open(tmp, "w") as fh:
         json.dump(data, fh, indent=2)
     os.replace(tmp, path)
+
+
+def load_settings():
+    s = dict(DEFAULT_SETTINGS)
+    s.update(load_json(SETTINGS_FILE, {}) or {})
+    return s
+
+
+def save_settings(settings):
+    save_json(SETTINGS_FILE, settings)

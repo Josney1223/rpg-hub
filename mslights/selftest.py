@@ -89,7 +89,36 @@ def run():
     else:
         print("audio SKIPPED (mixer unavailable)")
 
-    # 5) music pack export -> import round-trip
+    # 6) HA backend: controller emits correct service calls (fake client)
+    from . import ha
+    calls = []
+
+    class FakeClient:
+        base = "http://x"
+        token = "t"
+        def call(self, domain, service, payload):
+            calls.append((domain, service, payload)); return {}
+        def list_lights(self):
+            return [{"entity_id": "light.a", "name": "A"}]
+        def ping(self):
+            return {"message": "API running."}
+
+    hc = ha.HAController(lambda: FakeClient())
+    devs = [{"name": "A", "entity_id": "light.a"}]
+    hc.apply_colour(devs, (255, 0, 0))
+    assert calls[-1][0:2] == ("light", "turn_on")
+    assert calls[-1][2]["rgb_color"] == [255, 0, 0]
+    hc.blackout(devs)
+    assert calls[-1][1] == "turn_off"
+    calls.clear()
+    hc.start_effect("flicker", devs, (255, 0, 0))
+    time.sleep(0.4)
+    hc.stop_effect()
+    assert len(calls) >= 2 and all(c[1] == "turn_on" for c in calls)
+    assert hc._effect_thread is None
+    print(f"HA backend OK ({len(calls)} effect calls)")
+
+    # 5+) music pack export -> import round-trip
     pl = audio.new_playlist("Corridors", "OST", [w1, w2], loop=True, shuffle=False)
     zip_path = os.path.join(tmp, "pack.zip")
     packs.export_pack(zip_path, [pl], pack_name="Test Pack")

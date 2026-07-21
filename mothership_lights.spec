@@ -8,7 +8,7 @@ block_cipher = None
 hidden = [
     'mslights', 'mslights.app', 'mslights.config', 'mslights.colors',
     'mslights.lights', 'mslights.audio', 'mslights.packs', 'mslights.selftest',
-    'mslights.devices_panel', 'mslights.lights_panel', 'mslights.audio_panel',
+    'mslights.devices_panel', 'mslights.lights_panel', 'mslights.audio_panel', 'mslights.ha',
     'tinytuya', 'pygame',
 ]
 

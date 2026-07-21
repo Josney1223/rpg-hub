@@ -57,8 +57,9 @@ class LightsPanel(ttk.Frame):
                   ).grid(row=1, column=1, sticky="ew", padx=4)
 
     def _check(self, devs):
-        if tinytuya is None:
-            self.app.set_status("tinytuya not installed — lights disabled")
+        ok, msg = self.app.lights_ready()
+        if not ok:
+            self.app.set_status(msg)
             return False
         if not devs:
             self.app.set_status("No active bulbs selected")
