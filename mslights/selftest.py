@@ -108,15 +108,43 @@ def run():
     hc.apply_colour(devs, (255, 0, 0))
     assert calls[-1][0:2] == ("light", "turn_on")
     assert calls[-1][2]["rgb_color"] == [255, 0, 0]
+    assert "transition" not in calls[-1][2], "instant cue must not send transition"
+    hc.apply_white(devs, 2700)
+    assert calls[-1][2]["color_temp_kelvin"] == 2700
+    assert calls[-1][2]["brightness"] == 255      # master 1.0 -> full white
+    assert "transition" not in calls[-1][2]
     hc.blackout(devs)
     assert calls[-1][1] == "turn_off"
+    # flicker: several turn_on calls, then clean stop
     calls.clear()
     hc.start_effect("flicker", devs, (255, 0, 0))
     time.sleep(0.4)
     hc.stop_effect()
     assert len(calls) >= 2 and all(c[1] == "turn_on" for c in calls)
     assert hc._effect_thread is None
-    print(f"HA backend OK ({len(calls)} effect calls)")
+    # pulse: uses hardware transition for smoothness
+    calls.clear()
+    hc.start_effect("pulse", devs, (0, 0, 255))
+    time.sleep(0.4)
+    hc.stop_effect()
+    assert any("transition" in c[2] for c in calls), "pulse should use transition"
+    print(f"HA backend OK (flicker+pulse; pulse uses transition)")
+
+    # transition-rejection fallback: a client that errors on transition
+    rej = []
+    class PickyClient:
+        base = "http://x"; token = "t"
+        def call(self, domain, service, payload):
+            if "transition" in payload:
+                raise RuntimeError("transition not supported")
+            rej.append(payload); return {}
+    hc2 = ha.HAController(lambda: PickyClient())
+    hc2.start_effect("pulse", devs, (0, 0, 255))
+    time.sleep(0.3)
+    hc2.stop_effect()
+    assert hc2._no_transition is True, "should have disabled transition after rejection"
+    assert rej and all("transition" not in p for p in rej), "fallback calls must omit transition"
+    print("HA transition-fallback OK")
 
     # 5+) music pack export -> import round-trip
     pl = audio.new_playlist("Corridors", "OST", [w1, w2], loop=True, shuffle=False)

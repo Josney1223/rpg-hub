@@ -78,6 +78,19 @@ class Controller:
             except Exception as e:
                 self._status(f"{dev['name']}: {e}")
 
+    def apply_white(self, devices, kelvin):
+        """Use the bulb's dedicated white channel (brightest) at temperature K."""
+        self.stop_effect()
+        from .colors import kelvin_to_pct
+        ct = kelvin_to_pct(kelvin)
+        bri = max(1, min(100, int(round(self.master * 100))))
+        for dev in devices:
+            try:
+                self._push_on(dev)
+                self.get_bulb(dev).set_white_percentage(bri, ct)
+            except Exception as e:
+                self._status(f"{dev['name']}: {e}")
+
     def blackout(self, devices):
         self.stop_effect()
         for dev in devices:

@@ -62,6 +62,7 @@ class HAController:
         self._stop = threading.Event()
         self.master = 1.0
         self.speed = 1.0
+        self._no_transition = False          # set if the bulb rejects `transition`
 
     # -- interface parity with lights.Controller --------------------------- #
     def drop_bulb(self, name):
@@ -88,13 +89,28 @@ class HAController:
     def _bri(self, level):
         return max(1, min(255, int(round(level * self.master * 255))))
 
-    def _turn_on(self, c, entities, rgb, level=1.0):
-        c.call("light", "turn_on", {
+    def _send_on(self, c, payload, transition=None):
+        """turn_on with optional transition; if the bulb rejects transition,
+        retry once without it and stop using it thereafter."""
+        p = dict(payload)
+        if transition is not None and not self._no_transition:
+            p["transition"] = transition
+        try:
+            c.call("light", "turn_on", p)
+        except Exception as e:
+            if "transition" in p:
+                self._no_transition = True
+                p.pop("transition", None)
+                c.call("light", "turn_on", p)   # may raise; caller handles
+            else:
+                raise
+
+    def _turn_on(self, c, entities, rgb, level=1.0, transition=None):
+        self._send_on(c, {
             "entity_id": entities,
             "rgb_color": [int(rgb[0]), int(rgb[1]), int(rgb[2])],
             "brightness": self._bri(level),
-            "transition": 0,
-        })
+        }, transition)
 
     # -- one-shot cues ----------------------------------------------------- #
     def apply_colour(self, devices, rgb):
@@ -110,13 +126,31 @@ class HAController:
         except Exception as e:
             self._status(f"HA: {e}")
 
+    def apply_white(self, devices, kelvin):
+        """Use the bulb's white channel (brightest) at colour temperature K."""
+        self.stop_effect()
+        c = self._client()
+        if not c:
+            return
+        ents = self._entities(devices)
+        if not ents:
+            return
+        try:
+            self._send_on(c, {
+                "entity_id": ents,
+                "color_temp_kelvin": int(kelvin),
+                "brightness": self._bri(1.0),
+            })
+        except Exception as e:
+            self._status(f"HA: {e}")
+
     def blackout(self, devices):
         self.stop_effect()
         c = self._client()
         if not c:
             return
         try:
-            c.call("light", "turn_off", {"entity_id": self._entities(devices), "transition": 0})
+            c.call("light", "turn_off", {"entity_id": self._entities(devices)})
         except Exception as e:
             self._status(f"HA: {e}")
 
@@ -129,7 +163,7 @@ class HAController:
             for _ in range(3):
                 self._turn_on(c, [eid], (255, 255, 255), 1.0)
                 time.sleep(0.25)
-                c.call("light", "turn_off", {"entity_id": eid, "transition": 0})
+                c.call("light", "turn_off", {"entity_id": eid})
                 time.sleep(0.25)
             self._turn_on(c, [eid], (255, 255, 255), 1.0)
             self._status(f"{dev['name']}: blink OK")
@@ -165,31 +199,43 @@ class HAController:
         finally:
             self._status(f"effect '{kind}' stopped")
 
-    def _write(self, c, ents, rgb, level):
+    def _write(self, c, ents, rgb, level, transition=None):
         try:
-            self._turn_on(c, ents, rgb, level)
+            self._turn_on(c, ents, rgb, level, transition)
         except Exception:
             pass
 
     def _loop_flicker(self, c, ents, rgb):
+        # abrupt by design; over HA it's paced by request latency
         while not self._stop.is_set():
             roll = random.random()
             if roll < 0.12:
-                level, hold = random.uniform(0.02, 0.12), random.uniform(0.06, 0.14)
+                level, hold = random.uniform(0.02, 0.12), random.uniform(0.08, 0.16)
             elif roll < 0.30:
-                level, hold = random.uniform(0.25, 0.5), random.uniform(0.06, 0.16)
+                level, hold = random.uniform(0.25, 0.5), random.uniform(0.08, 0.18)
             else:
-                level, hold = random.uniform(0.6, 1.0), random.uniform(0.1, 0.24)
+                level, hold = random.uniform(0.6, 1.0), random.uniform(0.12, 0.28)
             self._write(c, ents, rgb, level)
             self._sleep(hold)
 
     def _loop_pulse(self, c, ents, rgb):
+        # Smooth: let the bulb fade via `transition`. If the bulb rejects
+        # transition, self._no_transition flips and we fall back to stepping.
         t = 0.0
         while not self._stop.is_set():
-            level = 0.15 + 0.85 * (0.5 - 0.5 * math.cos(t))
-            self._write(c, ents, rgb, level)
-            t += 0.15 * self.speed
-            self._sleep(0.08)
+            if self._no_transition:
+                level = 0.15 + 0.85 * (0.5 - 0.5 * math.cos(t))
+                self._write(c, ents, rgb, level)
+                t += 0.2 * self.speed
+                self._sleep(0.12)
+            else:
+                period = max(0.6, 1.6 / max(0.25, self.speed))
+                self._write(c, ents, rgb, 1.0, transition=period)
+                self._sleep(period)
+                if self._stop.is_set():
+                    break
+                self._write(c, ents, rgb, 0.15, transition=period)
+                self._sleep(period)
 
     def _loop_strobe(self, c, ents, rgb):
         on = True

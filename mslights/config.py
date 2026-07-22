@@ -23,6 +23,7 @@ CONFIG_DIR = default_config_dir()
 DEVICES_FILE = os.path.join(CONFIG_DIR, "devices.json")
 PLAYLISTS_FILE = os.path.join(CONFIG_DIR, "playlists.json")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
+COLORS_FILE = os.path.join(CONFIG_DIR, "colors.json")
 PACKS_DIR = os.path.join(CONFIG_DIR, "packs")
 
 DEFAULT_SETTINGS = {

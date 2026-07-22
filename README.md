@@ -109,6 +109,9 @@ to blink one bulb white so you can tell which is which.
 | ALERT RED | the moment it all goes wrong |
 | BLACKOUT | hard cut to darkness |
 
+
+> **Brightness & white:** *Full white* and *Normal (warm)* use the bulb's dedicated **white channel**, so they reach the bulb's true maximum brightness. The coloured presets use the RGB LEDs, which are inherently dimmer — that's the hardware, not the slider. The Brightness slider now applies live to whatever is showing.
+
 **Effects** run continuously on a background thread. Pick an effect colour, then:
 
 - **Flicker** — a failing panel: mostly lit with irregular dips and brief
@@ -202,6 +205,18 @@ python -m pip install pygame-ce
 This project already installs `pygame-ce` in its build scripts and requirements.
 
 ---
+
+## Saved colours
+
+Beyond the built-in presets you can save your own colours:
+
+- In the Lights tab, **＋ Pick & save colour** opens a colour picker; give it a
+  name and it's stored in `colors.json` (persists between runs).
+- Each saved colour shows under **My colours** with three actions: the **name
+  button** applies it instantly, **→ Fx** selects it as the effect colour, and
+  **Del** removes it.
+- The Effects **Colour** dropdown lists every preset *and* saved colour, so you
+  can run Flicker / Pulse / Strobe on any colour you've saved.
 
 ## Light backend: Home Assistant (recommended for Tuya/Elgin bulbs)
 

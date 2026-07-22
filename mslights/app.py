@@ -25,6 +25,7 @@ class App(tk.Tk):
 
         self.devices = config.load_json(config.DEVICES_FILE, [])
         self.playlists = config.load_json(config.PLAYLISTS_FILE, [])
+        self.custom_colors = config.load_json(config.COLORS_FILE, [])
         self.settings = config.load_settings()
         self.active = {d["name"]: tk.BooleanVar(value=True) for d in self.devices}
 
@@ -162,6 +163,9 @@ class App(tk.Tk):
         clean = [{k: v for k, v in p.items() if not k.startswith("_")}
                  for p in self.playlists]
         config.save_json(config.PLAYLISTS_FILE, clean)
+
+    def save_colors(self):
+        config.save_json(config.COLORS_FILE, self.custom_colors)
 
     def run_bg(self, fn, *args):
         threading.Thread(target=fn, args=args, daemon=True).start()
